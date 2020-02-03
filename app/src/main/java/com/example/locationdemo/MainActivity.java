@@ -9,6 +9,8 @@ import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.location.Address;
+import android.location.Geocoder;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -30,6 +32,10 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.google.android.material.snackbar.Snackbar;
 
+import java.io.IOException;
+import java.util.List;
+import java.util.Locale;
+
 
 public class MainActivity extends AppCompatActivity {
 
@@ -38,7 +44,7 @@ public class MainActivity extends AppCompatActivity {
     LocationListener locationListener;
 
     Button btn_start, btn_stop;
-    TextView txt_location;
+    TextView txt_location, txt_latitude, txt_longitude, txt_altitude, txt_accuracy, txt_address;
 
     // location from google play
     FusedLocationProviderClient locationClient;
@@ -49,6 +55,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onStart() {
         super.onStart();
         //check permission
+        btn_start.setEnabled(checkPermission());
         if (!checkPermission()) {
             requestPermission();
         } else {
@@ -60,9 +67,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        initViews();
         initLocation();
         initFused();
+        initViews();
     }
 
     private void initFused() {
@@ -70,12 +77,29 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void initViews() {
+        if (!checkPermission()) {
+            requestPermission();
+        } else {
+            getLastLocation();
+        }
+        locationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.myLooper());
+        txt_latitude = findViewById(R.id.txt_lat);
+        txt_longitude = findViewById(R.id.txt_lon);
+        txt_accuracy = findViewById(R.id.txt_accuracy);
+        txt_altitude = findViewById(R.id.txt_altitude);
+        txt_address = findViewById(R.id.txt_address);
         btn_start = findViewById(R.id.update);
+        btn_start.setEnabled(checkPermission());
         btn_stop = findViewById(R.id.stop);
         txt_location = findViewById(R.id.location);
         btn_start.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                if (!checkPermission()) {
+                    requestPermission();
+                } else {
+                    getLastLocation();
+                }
                 locationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.myLooper());
                 btn_start.setEnabled(!btn_start.isEnabled());
                 btn_stop.setEnabled(!btn_stop.isEnabled());
@@ -140,7 +164,23 @@ public class MainActivity extends AppCompatActivity {
             public void onLocationResult(LocationResult locationResult) {
                 //super.onLocationResult(locationResult);
                 for (Location location: locationResult.getLocations()) {
-                    setLocation(location);
+                    txt_latitude.setText(String.valueOf(location.getLatitude()));
+                    txt_longitude.setText(String.valueOf(location.getLongitude()));
+                    txt_accuracy.setText(String.valueOf(location.getAccuracy()));
+                    txt_altitude.setText(String.valueOf(location.getAltitude()));
+                    // get address
+                    Geocoder geocoder = new Geocoder(getApplicationContext(), Locale.getDefault());
+                    try {
+                        List<Address> addresses =  geocoder.getFromLocation(location.getLatitude(), location.getLongitude(), 1);
+                        if (addresses != null && addresses.size() > 0) {
+                            Address address = addresses.get(0);
+                            String country = address.getCountryName();
+                            txt_address.setText(address.getAddressLine(0) + "," + address.getPostalCode() + "," + country);
+                        }
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    Log.d("location updates>>>", location.getLatitude() + String.valueOf(location.getLongitude()));
                 }
             }
         };
@@ -205,8 +245,7 @@ public class MainActivity extends AppCompatActivity {
         locationClient.getLastLocation().addOnCompleteListener(this, new OnCompleteListener<Location>() {
             @Override
             public void onComplete(@NonNull Task<Location> task) {
-                if (task
-                        .isSuccessful() && task.getResult() != null) {
+                if (task.isSuccessful() && task.getResult() != null) {
                     setLocation(task.getResult());
                 }
             }
